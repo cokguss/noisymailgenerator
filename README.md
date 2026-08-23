@@ -55,7 +55,9 @@ Buka **http://127.0.0.1:5173** — selesai.
 | Perintah | Fungsi |
 |----------|--------|
 | `npm run dev` | Static server (5173) + mail relay (8000) sekaligus |
-| `npm start` | Mode produksi — satu server untuk page + API (port 8000) |
+| `npm start` | Mode produksi Node — satu server untuk page + API (port 8000) |
+| `npm run cf:dev` | Jalankan Cloudflare Worker di lokal (runtime Workers asli) |
+| `npm run cf:deploy` | Deploy ke Cloudflare Workers |
 | `npm run server` | Hanya mail relay |
 | `npm run web` | Hanya static server |
 
@@ -81,35 +83,45 @@ Semua respons mail diproses oleh `EmailParser`: ekstraksi OTP multi-pola (`123-4
 ```
 noisymailgenerator/
 ├── api/
-│   ├── _engine.js        # Engine bersama: CmntyMail + EmailParser + store statistik
-│   ├── generate.js       # Endpoint generate (kompatibel serverless)
-│   ├── inbox.js          # Endpoint daftar pesan
-│   ├── message.js        # Endpoint detail pesan
-│   ├── track.js          # Beacon pengunjung
-│   └── stats.js          # Data statistik (butuh key)
+│   └── _engine.js        # Engine bersama (runtime-agnostic): CmntyMail
+│                         # + EmailParser + store statistik — fetch & Web Crypto saja
 ├── server/
-│   └── server.js         # Express: seluruh API + static file satu container
-├── js/
-│   ├── i18n.js           # Kamus ID/EN + penerapan terjemahan
-│   └── main.js           # Widget generator, polling inbox, UI
-├── css/style.css         # Design system gelap ala terminal
+│   ├── server.js         # Express: seluruh API + static file satu container (Node)
+│   └── stats-store.js    # Stats store persisten JSON (khusus Node)
+├── public/               # Seluruh frontend (di-serve apa adanya, source aman)
+│   ├── index.html        # Landing page
+│   ├── privacy.html      # Kebijakan Privasi
+│   ├── terms.html        # Ketentuan Layanan
+│   ├── stats.html        # Dashboard statistik (internal)
+│   ├── css/style.css     # Design system gelap ala terminal
+│   ├── js/i18n.js        # Kamus ID/EN + penerapan terjemahan
+│   ├── js/main.js        # Widget generator, polling inbox, UI
+│   └── assets/           # Favicon & avatar
+├── worker.js             # Entry Cloudflare Worker (API + assets)
+├── wrangler.jsonc        # Konfigurasi Cloudflare
 ├── scripts/
 │   ├── dev.js            # Runner dev (web + relay paralel)
 │   └── static.js         # Static server zero-dependency
-├── index.html            # Landing page
-├── privacy.html          # Kebijakan Privasi
-├── terms.html            # Ketentuan Layanan
-├── stats.html            # Dashboard statistik (internal)
 └── package.json
 ```
 
 ## ☁️ Deploy
 
-Aplikasi ini **satu container tunggal** — cocok untuk platform apa pun yang menjalankan Node.js:
+### Cloudflare Workers (rekomendasi utama)
+
+Backend di-port penuh ke runtime Workers — `fetch` native + Web Crypto, tanpa dependensi Node:
+
+```bash
+npx wrangler login      # sekali saja (buka browser)
+npm run cf:deploy       # deploy → https://noisymailgenerator.<subdomain>.workers.dev
+```
+
+Static page + API jalan dalam **satu Worker**. Untuk statistik yang persisten antar-deploy, buat KV namespace lalu bind sebagai `STATS_KV` di `wrangler.jsonc` (lihat komentar di file tersebut). Custom domain bisa ditambahkan dari dashboard Cloudflare → Workers → Domains.
+
+### Platform Node (alternatif)
 
 | Platform | Cara |
 |----------|------|
-| **OpenShip** | Hubungkan repo → auto-detect Node → `npm start` → port 8000 |
 | **Railway / Render / Fly.io** | Start command `npm start`, biarkan env `PORT` mengatur port |
 | **VPS** | `npm install && npm start` di belakang Nginx/Caddy |
 
@@ -117,10 +129,10 @@ Aplikasi ini **satu container tunggal** — cocok untuk platform apa pun yang me
 
 | Variabel | Wajib? | Fungsi |
 |----------|--------|--------|
-| `PORT` | Opsional | Port server (default `8000`) |
+| `PORT` | Opsional (Node) | Port server (default `8000`) |
 | `STATS_KEY` | Disarankan | Kunci akses `/api/stats` — tanpa ini default mudah ditebak |
 | `CMNTY_API_KEY` | Opsional | Override key API mail tanpa ubah kode |
-| `KV_REST_API_URL` + `KV_REST_API_TOKEN` | Opsional | Upstash Redis agar statistik persisten antar rebuild |
+| `STATS_KV` (binding) | Opsional (Workers) | KV namespace agar statistik persisten antar deploy |
 
 ## ⚠️ Catatan
 

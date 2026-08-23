@@ -4,11 +4,12 @@ const express = require('express');
 const cors = require('cors');
 
 const { createEngine } = require('../api/_engine');
+const { createNodeStatsStore } = require('./stats-store');
 
 function createServer(port = 8000) {
   const app = express();
   const server = http.createServer(app);
-  const engine = createEngine();
+  const engine = createEngine({ statsStore: createNodeStatsStore() });
 
   app.use(cors());
   app.use(express.json());
@@ -66,19 +67,14 @@ function createServer(port = 8000) {
     }
   });
 
-  // JSON 404 for any unmatched /api path (never leak sources via static)
+  // JSON 404 for any unmatched /api path
   app.use('/api', (req, res) => {
     res.status(404).json({ status: 'error', data: null, message: 'Not found' });
   });
 
-  // Static frontend (single-container mode: page + API from one service).
-  // Internal dirs/files are excluded so static middleware can never serve them.
-  const WEB_ROOT = path.join(__dirname, '..');
-  const INTERNAL = /^\/(server|scripts|node_modules|data)(\/|$)|^\/package(-lock)?\.json$|^\/\./;
-  app.use((req, res, next) => {
-    if (INTERNAL.test(req.path)) return next();
-    express.static(WEB_ROOT, { index: 'index.html', extensions: ['html'] })(req, res, next);
-  });
+  // Static frontend - served from public/ only, so server sources can never leak.
+  const WEB_ROOT = path.join(__dirname, '..', 'public');
+  app.use(express.static(WEB_ROOT, { index: 'index.html', extensions: ['html'] }));
 
   return { app, server };
 }

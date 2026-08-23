@@ -1,13 +1,17 @@
-const axios = require("axios");
 const cheerio = require("cheerio");
-const crypto = require("crypto");
-const fs = require("fs");
-const path = require("path");
 
 /* ============================================================
- * SHARED ENGINE - used by local relay (server/server.js)
- * and Vercel serverless functions (api/*.js)
+ * SHARED ENGINE - runtime-agnostic (Node, Cloudflare Workers,
+ * and serverless functions). Only fetch + Web Crypto are used.
  * ============================================================ */
+
+async function sha256Prefix(text, len = 20) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, len);
+}
 
 class EmailParser {
   static extractOtp(text, html = null) {
@@ -140,16 +144,23 @@ class CmntyMail {
   static FALLBACK_KEY = "cmnty-373d1412a0f29bd96ba30bce37bd9812";
 
   get apiKey() {
-    return process.env.CMNTY_API_KEY || CmntyMail.FALLBACK_KEY;
+    const fromEnv =
+      typeof process !== "undefined" && process.env ? process.env.CMNTY_API_KEY : null;
+    return fromEnv || CmntyMail.FALLBACK_KEY;
   }
 
   async request(pathname, params) {
-    const res = await axios.get(`${CmntyMail.BASE}${pathname}`, {
-      params,
-      timeout: 15000,
-      validateStatus: () => true
-    });
-    const body = res.data && typeof res.data === "object" ? res.data : null;
+    const url = `${CmntyMail.BASE}${pathname}?${new URLSearchParams(params)}`;
+    let res;
+    try {
+      res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    } catch (err) {
+      throw new Error(`CMNTY request failed: ${err.message}`);
+    }
+    let body = null;
+    try {
+      body = await res.json();
+    } catch (_) {}
     if (res.status === 200 && body && body.status === true && body.result) return body.result;
     throw new Error((body && body.message) || `CMNTY request failed (HTTP ${res.status})`);
   }
@@ -210,7 +221,9 @@ class CmntyMail {
 /* ============================================================
  * VISITOR STATS - privacy-friendly, aggregate-only.
  * IPs are hashed with a daily salt; no cookies, no profiles.
- * Storage: Vercel KV (if env vars set) > JSON file (local) > memory.
+ * Storage here is runtime-safe everywhere (REST KV > memory).
+ * Node-only persistent file store lives in server/stats-store.js
+ * and is injected via createEngine({ statsStore }).
  * ============================================================ */
 
 class MemoryStore {
@@ -228,37 +241,6 @@ class MemoryStore {
     this.h[h][f] = (this.h[h][f] || 0) + by;
   }
   async hgetall(h) { return { ...this.h[h] }; }
-}
-
-class FileStore extends MemoryStore {
-  constructor(file) {
-    super();
-    this.file = file;
-    this._timer = null;
-    try {
-      const raw = JSON.parse(fs.readFileSync(file, "utf8"));
-      this.c = raw.c || {};
-      this.h = raw.h || {};
-      for (const [k, arr] of Object.entries(raw.s || {})) {
-        this.s[k] = new Set(arr);
-      }
-    } catch (_) {}
-  }
-  _flush() {
-    if (this._timer) return;
-    this._timer = setTimeout(() => {
-      this._timer = null;
-      try {
-        const s = {};
-        for (const [k, set] of Object.entries(this.s)) s[k] = [...set];
-        fs.mkdirSync(path.dirname(this.file), { recursive: true });
-        fs.writeFileSync(this.file, JSON.stringify({ c: this.c, s, h: this.h }));
-      } catch (_) {}
-    }, 500);
-  }
-  async incr(k) { const r = await super.incr(k); this._flush(); return r; }
-  async hincr(h, f, by = 1) { const r = await super.hincr(h, f, by); this._flush(); return r; }
-  async sadd(k, m) { await super.sadd(k, m); this._flush(); }
 }
 
 class KvStore {
@@ -286,23 +268,25 @@ class KvStore {
 }
 
 function createStore() {
-  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+  const hasRestKv =
+    typeof process !== "undefined" &&
+    process.env &&
+    process.env.KV_REST_API_URL &&
+    process.env.KV_REST_API_TOKEN;
+  if (hasRestKv) {
     try {
       return new KvStore(process.env.KV_REST_API_URL, process.env.KV_REST_API_TOKEN);
     } catch (_) {}
   }
-  try {
-    return new FileStore(path.join(process.cwd(), "data", "stats.json"));
-  } catch (_) {}
   return new MemoryStore();
 }
 
 /* ============================================================
- * HIGH-LEVEL OPERATIONS (shared by express + serverless)
+ * HIGH-LEVEL OPERATIONS (shared by express + workers + serverless)
  * ============================================================ */
-function createEngine() {
+function createEngine(options = {}) {
   const cmnty = new CmntyMail();
-  const statsStore = createStore();
+  const statsStore = options.statsStore || createStore();
 
   function fmt(status, data, message = null, errorCode = null) {
     const out = { status, data };
@@ -317,11 +301,7 @@ function createEngine() {
     try {
       const day = new Date().toISOString().slice(0, 10);
       const safePage = String(page || "home").replace(/[^a-z0-9\-_]/gi, "").slice(0, 24) || "home";
-      const uid = crypto
-        .createHash("sha256")
-        .update(`${ip}|${ua}|${day}`)
-        .digest("hex")
-        .slice(0, 20);
+      const uid = await sha256Prefix(`${ip}|${ua}|${day}`, 20);
 
       await statsStore.incr("stats:total");
       await statsStore.incr(`stats:day:${day}`);
@@ -351,7 +331,9 @@ function createEngine() {
   }
 
   async function opStats(key) {
-    const expected = process.env.STATS_KEY || "noisy-admin";
+    const envKey =
+      typeof process !== "undefined" && process.env ? process.env.STATS_KEY : null;
+    const expected = envKey || "noisy-admin";
     if (String(key || "") !== expected) {
       return fmt("error", null, "Invalid stats key", "UNAUTHORIZED");
     }

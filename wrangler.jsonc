@@ -1,0 +1,26 @@
+// Cloudflare Workers configuration
+// Deploy:  npx wrangler login  →  npx wrangler deploy
+// Local:   npx wrangler dev
+{
+  "$schema": "https://unpkg.com/wrangler/config-schema.json",
+  "name": "noisymailgenerator",
+  "main": "worker.js",
+  "compatibility_date": "2026-08-01",
+
+  // static landing page (public/) served by the same worker
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+
+  // OPTIONAL persistent visitor stats:
+  // create a KV namespace (dashboard → Storage & Databases → KV,
+  // or `npx wrangler kv namespace create STATS_KV`), then add:
+  // "kv_namespaces": [
+  //   { "binding": "STATS_KV", "id": "<namespace-id-here>" }
+  // ],
+
+  "observability": {
+    "enabled": true
+  }
+}

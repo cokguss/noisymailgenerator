@@ -49,7 +49,7 @@ $$;
 -- hash: hincr & hgetall (per halaman / referrer / device)
 create or replace function stats_hincr(p_key text, p_field text, p_by bigint default 1)
 returns void language sql as $$
-  insert into stats_hashes (key, field, value) values (p_key, p_by)
+  insert into stats_hashes (key, field, value) values (p_key, p_field, p_by)
   on conflict (key, field) do update set value = stats_hashes.value + excluded.value;
 $$;
 

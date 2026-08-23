@@ -1079,13 +1079,16 @@ h1 {
 
 .footer-links {
   display: flex;
-  gap: 24px;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px 20px;
 }
 
 .footer-links a {
   color: var(--muted);
   font-size: 13.5px;
   text-decoration: none;
+  white-space: nowrap;
   transition: color 0.2s;
 }
 

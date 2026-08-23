@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Noisy Mail Generator — Disposable email that keeps your real inbox quiet</title>
+  <meta name="description" content="Generate a burner email address in one click. Sign up anywhere, receive mail instantly, walk away without a trace." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <meta name="theme-color" content="#0a0c0a" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/regular/style.css" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <div class="preloader" id="preloader" aria-hidden="true">
+    <div class="preloader-inner">
+      <p class="preloader-brand mono">noisy<span class="brand-accent">_</span>mail<span class="cursor"></span></p>
+      <p class="preloader-title mono">NOISY MAIL GENERATOR</p>
+      <div class="preloader-bar"><span></span></div>
+      <p class="preloader-status mono" data-i18n="pre.status">initializing secure relay…</p>
+    </div>
+  </div>
+
+  <div class="noise-overlay" aria-hidden="true"></div>
+
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="brand mono" href="#top">noisy<span class="brand-accent">_</span>mail<span class="cursor" aria-hidden="true"></span></a>
+
+      <nav class="nav-links" id="navLinks" aria-label="Main navigation">
+        <a href="#inbox" data-i18n="nav.inboxDemo">Inbox demo</a>
+        <a href="#features" data-i18n="nav.features">Features</a>
+        <a href="#how" data-i18n="nav.how">How it works</a>
+        <a href="#faq" data-i18n="nav.faq">FAQ</a>
+      </nav>
+
+      <div class="nav-actions">
+        <div class="lang-toggle mono" role="group" aria-label="Language / Bahasa">
+          <button type="button" data-lang="en" aria-pressed="true">EN</button>
+          <button type="button" data-lang="id" aria-pressed="false">ID</button>
+        </div>
+        <button class="btn btn-primary btn-sm js-generate" type="button" data-i18n="btn.generate">Generate Address</button>
+        <button class="nav-toggle" id="navToggle" type="button" aria-label="Toggle menu" aria-expanded="false" aria-controls="navLinks">
+          <i class="ph ph-list" aria-hidden="true"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main id="top">
+
+    <!-- HERO -->
+    <section class="hero">
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow mono">disposable_email --protocol v2</p>
+          <h1 data-i18n="hero.h1">Loud address.<br /><span class="accent-text">Silent inbox.</span></h1>
+          <p class="hero-sub" data-i18n="hero.sub">
+            Generate a burner address in one click. Sign up anywhere,
+            keep spam out of your real inbox, and walk away anytime.
+          </p>
+          <div class="hero-actions">
+            <button class="btn btn-primary js-generate" type="button">
+              <span data-i18n="btn.generate">Generate Address</span>
+              <i class="ph ph-arrow-right" aria-hidden="true"></i>
+            </button>
+            <a class="btn btn-ghost" href="#how" data-i18n="btn.howSee">See how it works</a>
+          </div>
+        </div>
+
+        <div class="widget-wrap" id="widget">
+          <div class="widget" role="region" aria-label="Address generator demo">
+            <div class="widget-head">
+              <span class="dot dot-red" aria-hidden="true"></span>
+              <span class="dot dot-amber" aria-hidden="true"></span>
+              <span class="dot dot-green" aria-hidden="true"></span>
+              <span class="widget-title mono">noisymail — session_01</span>
+              <span class="provider-badge mono" id="providerBadge" title="Active mail relay">RELAY:…</span>
+              <span class="status mono" id="widgetStatus" data-state="loading"><span class="status-dot" aria-hidden="true"></span>CONNECTING</span>
+            </div>
+
+            <div class="widget-body">
+              <p class="widget-label mono">$ your temporary address:</p>
+              <div class="address-box">
+                <code class="address mono" id="addressText" aria-hidden="true"></code>
+                <span class="sr-only" id="addressLive" aria-live="polite"></span>
+                <button class="icon-btn" id="copyBtn" type="button" aria-label="Copy address" disabled>
+                  <i class="ph ph-copy" aria-hidden="true"></i>
+                </button>
+              </div>
+              <p class="widget-hint mono" id="widgetHint" data-i18n="widget.hint">establishing secure mailbox…</p>
+
+              <div class="widget-meta">
+                <span class="mono meta-item" id="metaInfo"><i class="ph ph-shield-check" aria-hidden="true"></i> receive-only · inbox polls every 15s</span>
+                <button class="btn btn-outline btn-sm" id="regenBtn" type="button">
+                  <i class="ph ph-arrows-clockwise" aria-hidden="true"></i>
+                  <span data-i18n="btn.regen">Regenerate</span>
+                </button>
+              </div>
+            </div>
+          </div>
+          <p class="widget-caption mono" data-i18n="widget.caption">live mailbox — connected to a real temp-mail network</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- INBOX PREVIEW -->
+    <section class="section inbox-section" id="inbox">
+      <div class="container">
+        <h2 class="reveal" data-i18n="inbox.h2">Your inbox, in real time.</h2>
+        <p class="section-sub reveal" data-i18n="inbox.sub">Mail sent to your generated address lands here automatically — the page polls the network so you don't have to refresh anything.</p>
+
+        <div class="terminal reveal" role="region" aria-label="Live inbox">
+          <div class="terminal-head mono">
+            <span><i class="ph ph-envelope-simple" aria-hidden="true"></i> <span id="inboxPath" data-i18n="inbox.path">/inbox — generating your address…</span></span>
+            <span class="terminal-actions">
+              <span class="terminal-count" id="pollStatus"></span>
+              <button class="icon-btn" id="refreshInbox" type="button" aria-label="Refresh inbox now">
+                <i class="ph ph-arrows-clockwise" aria-hidden="true"></i>
+              </button>
+            </span>
+          </div>
+          <ul class="mail-list" id="mailList">
+            <li class="mail-empty">
+              <i class="ph ph-tray" aria-hidden="true"></i>
+              <span data-i18n="inbox.empty">waiting for your address…</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- FEATURES BENTO -->
+    <section class="section features-section" id="features">
+      <div class="container">
+        <h2 class="reveal" data-i18n="feat.h2">Built to be thrown away.</h2>
+        <p class="section-sub reveal" data-i18n="feat.sub">Everything you need from a temp-mail service. Nothing you don't.</p>
+
+        <div class="bento">
+          <article class="cell cell-wide cell-pattern reveal">
+            <h3 data-i18n="feat1.h3">Instant generation</h3>
+            <p data-i18n="feat1.p">A fresh, working address the moment the page loads. No forms, no verification loops, no waiting rooms.</p>
+            <div class="mini-feed mono" aria-hidden="true">
+              <span class="feed-row"><span class="feed-dot"></span><span data-i18n="feat1.f1">fresh address ready the moment you land</span></span>
+              <span class="feed-row"><span class="feed-dot feed-dot-dim"></span><span data-i18n="feat1.f2">no forms, no verification loops</span></span>
+            </div>
+          </article>
+
+          <article class="cell reveal">
+            <i class="ph ph-user-slash cell-icon" aria-hidden="true"></i>
+            <h3 data-i18n="feat2.h3">Zero signup</h3>
+            <p data-i18n="feat2.p">No account, no password, no personal data. Ever.</p>
+          </article>
+
+          <article class="cell cell-dark reveal">
+            <h3 class="mono cell-count-label">LIVE POLLING</h3>
+            <p class="cell-countdown mono" id="bentoInterval" aria-hidden="true">15s</p>
+            <p data-i18n="feat3.p">Your inbox refreshes itself automatically while the tab is open.</p>
+          </article>
+
+          <article class="cell reveal">
+            <i class="ph ph-shield-check cell-icon" aria-hidden="true"></i>
+            <h3 data-i18n="feat4.h3">Spam shield</h3>
+            <p data-i18n="feat4.p">Junk is filtered before it ever reaches your preview.</p>
+          </article>
+
+          <article class="cell cell-code reveal">
+            <h3 data-i18n="feat5.h3">Developer-first API</h3>
+            <pre class="snippet mono"><code>curl noisymail.co/api/v1/inbox \
+  -H "Authorization: Bearer $KEY"</code></pre>
+            <p data-i18n="feat5.p">Wire disposable addresses straight into your tests and pipelines.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- HOW IT WORKS -->
+    <section class="section how-section" id="how">
+      <div class="container">
+        <h2 class="reveal" data-i18n="how.h2">Three steps. Ten minutes.</h2>
+
+        <ol class="steps">
+          <li class="step reveal">
+            <span class="step-num mono">01</span>
+            <h3 data-i18n="step1.h3">Generate</h3>
+            <p data-i18n="step1.p">One click produces a random, anonymous address with its own live mailbox.</p>
+          </li>
+          <li class="step reveal">
+            <span class="step-num mono">02</span>
+            <h3 data-i18n="step2.h3">Use it</h3>
+            <p data-i18n="step2.p">Paste it into any signup form. Incoming mail appears here within seconds.</p>
+          </li>
+          <li class="step reveal">
+            <span class="step-num mono">03</span>
+            <h3 data-i18n="step3.h3">Burn it</h3>
+            <p data-i18n="step3.p">Walk away whenever you want. The address dies quietly on its own.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="section faq-section" id="faq">
+      <div class="container container-narrow">
+        <h2 class="reveal" data-i18n="faq.h2">Questions, answered.</h2>
+
+        <div class="faq-list reveal">
+          <details class="faq-item">
+            <summary data-i18n="faq.q1">Is Noisy Mail really free?</summary>
+            <p data-i18n="faq.a1">Yes. Every feature on this page — generation, inbox preview, expiry — is free and needs no account.</p>
+          </details>
+          <details class="faq-item">
+            <summary data-i18n="faq.q2">Can I send email from a generated address?</summary>
+            <p data-i18n="faq.a2">No. Addresses are receive-only by design. That keeps deliverability high and abuse near zero.</p>
+          </details>
+          <details class="faq-item">
+            <summary data-i18n="faq.q3">Why did a site reject my address?</summary>
+            <p data-i18n="faq.a3">Some sites block disposable emails by default — that's their policy, not a bug. Noisy works everywhere burner addresses are accepted: signups, downloads, one-off verifications, and testing.</p>
+          </details>
+          <details class="faq-item">
+            <summary data-i18n="faq.q4">How long does an address live?</summary>
+            <p data-i18n="faq.a4">Until the upstream mail network recycles the username — that can be minutes or longer. Never rely on a noisy address for anything you need to recover later.</p>
+          </details>
+          <details class="faq-item">
+            <summary data-i18n="faq.q5">Should I use it for banking or sensitive accounts?</summary>
+            <p data-i18n="faq.a5">Please don't. Burner addresses are for signups, downloads, and one-off verifications — not anything you need to recover later.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- DEVELOPER -->
+    <section class="section dev-section" id="dev">
+      <div class="container">
+        <div class="dev-card reveal">
+          <span class="dev-online mono" role="status">
+            <i class="dev-pulse" aria-hidden="true"></i>
+            <span class="dev-online-label">online</span>
+            <span class="dev-online-bars" aria-hidden="true"><i></i><i></i><i></i></span>
+          </span>
+
+          <div class="dev-photo-wrap">
+            <span class="dev-ring" aria-hidden="true"></span>
+            <img src="assets/avatar.png" alt="Photo of Noisy" class="dev-photo"
+                 onerror="this.style.display='none'; this.parentNode.classList.add('no-photo');" />
+            <span class="dev-monogram mono" aria-hidden="true">N</span>
+          </div>
+
+          <p class="eyebrow mono">the_developer --profile</p>
+          <h2 class="dev-name" data-i18n="dev.h2">Built by <span class="accent-text">Noisy</span>.</h2>
+          <p class="dev-handle mono" data-i18n="dev.handle">@cokguss · indie builder</p>
+
+          <hr class="dev-sep" />
+
+          <p class="dev-bio" data-i18n="dev.bio">
+            Indie builder making tools that stay out of your way.
+            Noisy Mail Generator is free, accountless, and always will be.
+          </p>
+
+          <div class="dev-socials">
+            <a class="credit-chip" href="https://t.me/noisy05" target="_blank" rel="noopener noreferrer" aria-label="Telegram noisy05">
+              <i class="ph ph-telegram-logo" aria-hidden="true"></i> telegram · noisy05
+            </a>
+            <a class="credit-chip" href="https://github.com/cokguss" target="_blank" rel="noopener noreferrer" aria-label="GitHub cokguss">
+              <i class="ph ph-github-logo" aria-hidden="true"></i> github · cokguss
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <a class="brand mono" href="#top">noisy<span class="brand-accent">_</span>mail</a>
+      <nav class="footer-links" aria-label="Footer navigation">
+        <a href="#features" data-i18n="nav.features">Features</a>
+        <a href="#how" data-i18n="nav.how">How it works</a>
+        <a href="#faq" data-i18n="nav.faq">FAQ</a>
+        <a href="#dev" data-i18n="foot.dev">Developer</a>
+        <a href="privacy.html" data-i18n="foot.privacy">Privacy Policy</a>
+        <a href="terms.html" data-i18n="foot.terms">Terms of Service</a>
+      </nav>
+      <p class="footer-note mono" data-i18n="foot.note">© 2026 Noisy Mail Generator · loud address, silent inbox</p>
+    </div>
+  </footer>
+
+  <script src="js/i18n.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

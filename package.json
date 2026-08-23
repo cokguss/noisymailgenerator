@@ -1,0 +1,21 @@
+{
+  "name": "noisy-mail-generator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Noisy Mail Generator - disposable email landing page with dual-network relay",
+  "scripts": {
+    "dev": "node scripts/dev.js",
+    "start": "node server/server.js",
+    "server": "node server/server.js",
+    "web": "node scripts/static.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "cheerio": "^1.0.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

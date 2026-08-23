@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Visitor Stats — Noisy Mail Generator</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <meta name="theme-color" content="#0a0c0a" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/regular/style.css" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="brand mono" href="index.html">noisy<span class="brand-accent">_</span>mail<span class="cursor" aria-hidden="true"></span></a>
+      <nav class="nav-links" id="navLinks" aria-label="Main navigation">
+        <a href="index.html#features">Features</a>
+        <a href="index.html#how">How it works</a>
+        <a href="index.html#faq">FAQ</a>
+        <a href="stats.html" aria-current="page">Stats</a>
+      </nav>
+      <div class="nav-actions">
+        <a class="btn btn-primary btn-sm" href="index.html#widget">Generate Address</a>
+        <button class="nav-toggle" id="navToggle" type="button" aria-label="Toggle menu" aria-expanded="false" aria-controls="navLinks">
+          <i class="ph ph-list" aria-hidden="true"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="doc">
+    <div class="container container-doc" style="width:min(880px,100% - 48px)">
+      <p class="doc-kicker mono"><i class="ph ph-chart-bar" aria-hidden="true"></i> admin --visitor-stats</p>
+      <h1 class="doc-title">Traffic</h1>
+      <p class="doc-meta mono">aggregate only · visitors are anonymized (hashed daily)</p>
+
+      <div id="gate" class="stats-gate">
+        <label class="mono" for="keyInput">STATS_KEY</label>
+        <div class="gate-row">
+          <input id="keyInput" type="password" placeholder="enter stats key" autocomplete="off" />
+          <button class="btn btn-primary btn-sm" id="keyBtn" type="button">Unlock</button>
+        </div>
+        <p class="gate-hint mono">default key is "noisy-admin" — set STATS_KEY env var to change it.</p>
+      </div>
+
+      <div id="dashboard" hidden>
+        <div class="stat-grid">
+          <div class="stat-card"><span class="stat-num mono" id="stTotal">–</span><span class="stat-label mono">total views</span></div>
+          <div class="stat-card"><span class="stat-num mono" id="stToday">–</span><span class="stat-label mono">views today</span></div>
+          <div class="stat-card"><span class="stat-num mono" id="stUniq">–</span><span class="stat-label mono">unique today</span></div>
+          <div class="stat-card"><span class="stat-num mono" id="stYest">–</span><span class="stat-label mono">views yesterday</span></div>
+        </div>
+
+        <section class="stats-block">
+          <h2 class="mono">LAST 7 DAYS</h2>
+          <div class="chart" id="chart"></div>
+          <div class="chart-legend mono">
+            <span><i class="legend-dot dot-views"></i> views</span>
+            <span><i class="legend-dot dot-uniq"></i> unique</span>
+          </div>
+        </section>
+
+        <div class="lists-row">
+          <section class="stats-block">
+            <h2 class="mono">TOP PAGES</h2>
+            <ul class="rank-list" id="listPages"></ul>
+          </section>
+          <section class="stats-block">
+            <h2 class="mono">REFERRERS</h2>
+            <ul class="rank-list" id="listRefs"></ul>
+          </section>
+          <section class="stats-block">
+            <h2 class="mono">DEVICES</h2>
+            <ul class="rank-list" id="listDevices"></ul>
+          </section>
+        </div>
+
+        <button class="btn btn-outline btn-sm" id="reloadBtn" type="button">
+          <i class="ph ph-arrows-clockwise" aria-hidden="true"></i> Refresh data
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <a class="brand mono" href="index.html">noisy<span class="brand-accent">_</span>mail</a>
+      <p class="footer-note mono">internal dashboard — do not share publicly</p>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
+  <script>
+    (() => {
+      "use strict";
+      const $ = (id) => document.getElementById(id);
+      const LOCAL = "http://127.0.0.1:8000/api";
+      const isLocal = ["127.0.0.1", "localhost"].includes(location.hostname);
+      let base = location.origin + "/api";
+
+      async function detect() {
+        if (!isLocal) return;
+        try {
+          const r = await fetch(`${LOCAL}/status`, { signal: AbortSignal.timeout(2000) });
+          if (r.ok && (await r.json()).status === "online") base = LOCAL;
+        } catch (_) {}
+      }
+
+      function render(d) {
+        $("stTotal").textContent = d.total.toLocaleString();
+        $("stToday").textContent = d.today.views.toLocaleString();
+        $("stUniq").textContent = d.today.uniq.toLocaleString();
+        $("stYest").textContent = d.yesterday.views.toLocaleString();
+
+        const chart = $("chart");
+        chart.replaceChildren();
+        const max = Math.max(...d.days.map((x) => x.views), 1);
+        d.days.forEach((day) => {
+          const col = document.createElement("div");
+          col.className = "chart-col";
+          const bars = document.createElement("div");
+          bars.className = "chart-bars";
+          [["dot-views", day.views], ["dot-uniq", day.uniq]].forEach(([cls, val]) => {
+            const b = document.createElement("div");
+            b.className = `bar ${cls}`;
+            b.style.height = `${Math.max((val / max) * 100, 3)}%`;
+            bars.appendChild(b);
+          });
+          const label = document.createElement("span");
+          label.className = "chart-day mono";
+          label.textContent = day.date.slice(5);
+          label.title = `${day.views} views · ${day.uniq} unique`;
+          col.append(bars, label);
+          chart.appendChild(col);
+        });
+
+        fillList("listPages", d.pages);
+        fillList("listRefs", d.refs);
+        fillList("listDevices", d.devices);
+      }
+
+      function fillList(id, items) {
+        const ul = $(id);
+        ul.replaceChildren();
+        if (!items.length) {
+          const li = document.createElement("li");
+          li.className = "rank-empty mono";
+          li.textContent = "no data yet";
+          ul.appendChild(li);
+          return;
+        }
+        const max = Math.max(...items.map((i) => i.count));
+        items.forEach(({ name, count }) => {
+          const li = document.createElement("li");
+          const barFill = document.createElement("span");
+          barFill.className = "rank-bar";
+          barFill.style.width = `${(count / max) * 100}%`;
+          const nameEl = document.createElement("span");
+          nameEl.className = "rank-name";
+          nameEl.textContent = name;
+          const num = document.createElement("span");
+          num.className = "rank-count mono";
+          num.textContent = count.toLocaleString();
+          li.append(barFill, nameEl, num);
+          ul.appendChild(li);
+        });
+      }
+
+      async function load(key) {
+        const res = await fetch(`${base}/stats?key=${encodeURIComponent(key)}`);
+        const json = await res.json().catch(() => null);
+        if (!json || json.status !== "success") return false;
+        $("gate").hidden = true;
+        $("dashboard").hidden = false;
+        render(json.data);
+        return true;
+      }
+
+      $("keyBtn").addEventListener("click", async () => {
+        const key = $("keyInput").value.trim();
+        if (!key) return;
+        if (await load(key)) {
+          try { localStorage.setItem("nm_stats_key", key); } catch (_) {}
+        } else {
+          alert("Invalid stats key.");
+        }
+      });
+
+      $("reloadBtn").addEventListener("click", () => {
+        try { load(localStorage.getItem("nm_stats_key") || ""); } catch (_) {}
+      });
+
+      (async () => {
+        await detect();
+        let saved = null;
+        try { saved = localStorage.getItem("nm_stats_key"); } catch (_) {}
+        if (saved) await load(saved);
+      })();
+    })();
+  </script>
+</body>
+</html>

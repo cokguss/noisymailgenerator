@@ -83,16 +83,23 @@
 
   async function detectProvider() {
     const isLocalHost = ["127.0.0.1", "localhost"].includes(location.hostname);
-    const bases = isLocalHost ? [LOCAL_BASE, sameOriginBase()] : [sameOriginBase(), LOCAL_BASE];
 
-    for (const base of bases) {
-      const st = await fetchJson(`${base}/status`, {}, 2500);
-      if (st && st.status === "online") {
-        activeBase = base;
-        break;
+    if (!isLocalHost) {
+      /* production: the backend always lives on this same origin
+         (Vercel functions / Worker / Node container) - no probing,
+         so a slow serverless cold start can never break detection */
+      activeBase = sameOriginBase();
+    } else {
+      const bases = [LOCAL_BASE, sameOriginBase()];
+      for (const base of bases) {
+        const st = await fetchJson(`${base}/status`, {}, 4000);
+        if (st && st.status === "online") {
+          activeBase = base;
+          break;
+        }
       }
+      if (!activeBase) activeBase = "cloud";
     }
-    if (!activeBase) activeBase = "cloud";
 
     setProviderBadge(
       activeBase === LOCAL_BASE ? "local" : activeBase === "cloud" ? "relay" : "edge"
@@ -101,12 +108,14 @@
     updateMetaInfo();
   }
 
+  function activeApiBase() {
+    return activeBase && activeBase !== "cloud" ? activeBase : sameOriginBase();
+  }
+
   async function createAddress() {
-    if (activeBase && activeBase !== "cloud") {
-      const json = await fetchJson(`${activeBase}/generate`);
-      if (json && json.status === "success" && json.data?.email) {
-        return { email: json.data.email };
-      }
+    const json = await fetchJson(`${activeApiBase()}/generate`);
+    if (json && json.status === "success" && json.data?.email) {
+      return { email: json.data.email };
     }
     return { error: t("d.relayError") };
   }
@@ -116,8 +125,7 @@
   }
 
   async function fetchInbox(email) {
-    if (!activeBase || activeBase === "cloud") return null;
-    const json = await fetchJson(`${activeBase}/inbox?${qs({ email })}`);
+    const json = await fetchJson(`${activeApiBase()}/inbox?${qs({ email })}`);
     if (!json || json.status !== "success") return null;
     const msgs = Array.isArray(json.data?.messages) ? json.data.messages : [];
     return msgs.map((m) => ({
@@ -138,7 +146,7 @@
 
   async function fetchMessageDetail(email, link) {
     const json = await fetchJson(
-      `${activeBase}/message?${qs({ email, link })}`
+      `${activeApiBase()}/message?${qs({ email, link })}`
     );
     if (!json || json.status !== "success" || !json.data) return null;
     const d = json.data;
@@ -394,7 +402,7 @@
         return;
       }
 
-      if (activeBase && activeBase !== "cloud" && message.link && currentAddress) {
+      if (message.link && currentAddress) {
         const placeholder = document.createElement("p");
         placeholder.className = "mail-body";
         placeholder.textContent = t("d.loadingMsg");

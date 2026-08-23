@@ -578,7 +578,7 @@
 
   async function loadPublicStats() {
     if (!$("pubTotal")) return;
-    const json = await fetchJson(`${activeApiBase()}/stats/public`);
+    const json = await fetchJson(`${activeApiBase()}/stats-public`);
     if (!json || json.status !== "success") return;
     const d = json.data || {};
     animateNumber($("pubTotal"), d.totalViews || 0);

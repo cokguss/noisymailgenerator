@@ -58,7 +58,7 @@ function createServer(port = 8000) {
     }
   });
 
-  app.get('/api/stats/public', async (req, res) => {
+  app.get('/api/stats-public', async (req, res) => {
     try {
       res.json(await engine.opPublicStats());
     } catch (err) {

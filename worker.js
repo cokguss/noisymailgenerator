@@ -126,6 +126,7 @@ export default {
           );
         }
 
+        case "/api/stats-public":
         case "/api/stats/public":
           return json(await engine.opPublicStats());
 

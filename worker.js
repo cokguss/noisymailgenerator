@@ -6,7 +6,7 @@
  * Optional persistent stats: bind a KV namespace as STATS_KV
  * in wrangler.jsonc; without it, stats live in isolate memory.
  * ============================================================ */
-import { createEngine } from "./api/_engine.js";
+import { createEngine, SupabaseStore } from "./api/_engine.js";
 
 /* ---- KV-binding stats store (Cloudflare Workers) ---- */
 class KvBindingStore {
@@ -59,8 +59,13 @@ class KvBindingStore {
 let cachedEngine = null;
 function getEngine(env) {
   if (!cachedEngine) {
-    const statsStore =
-      env && env.STATS_KV ? new KvBindingStore(env.STATS_KV) : undefined;
+    let statsStore;
+    const sbKey = env && (env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_KEY);
+    if (env && env.SUPABASE_URL && sbKey) {
+      statsStore = new SupabaseStore(env.SUPABASE_URL, sbKey);
+    } else if (env && env.STATS_KV) {
+      statsStore = new KvBindingStore(env.STATS_KV);
+    }
     cachedEngine = createEngine(statsStore ? { statsStore } : {});
   }
   return cachedEngine;

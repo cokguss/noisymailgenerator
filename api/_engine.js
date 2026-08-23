@@ -267,15 +267,65 @@ class KvStore {
   }
 }
 
+/* ============================================================
+ * SUPABASE STORE (Postgres via PostgREST RPC, fetch-based)
+ * Setup: run supabase/stats-setup.sql once in the SQL editor,
+ * then provide SUPABASE_URL + SUPABASE_KEY (service_role).
+ * Works on Node, serverless, and Cloudflare Workers.
+ * ============================================================ */
+class SupabaseStore {
+  constructor(url, key) {
+    this.base = String(url).replace(/\/$/, "");
+    this.key = key;
+  }
+
+  async rpc(fn, args) {
+    const res = await fetch(`${this.base}/rest/v1/rpc/${fn}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        apikey: this.key,
+        authorization: `Bearer ${this.key}`
+      },
+      body: JSON.stringify(args),
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!res.ok) throw new Error(`Supabase rpc ${fn} failed (HTTP ${res.status})`);
+    return res.json().catch(() => null);
+  }
+
+  async incr(k) {
+    return Number(await this.rpc("stats_incr", { p_key: k })) || 0;
+  }
+  async get(k) {
+    return Number(await this.rpc("stats_get", { p_key: k })) || 0;
+  }
+  async sadd(k, m) {
+    await this.rpc("stats_sadd", { p_key: k, p_member: m });
+  }
+  async scard(k) {
+    return Number(await this.rpc("stats_scard", { p_key: k })) || 0;
+  }
+  async hincr(h, f, by = 1) {
+    await this.rpc("stats_hincr", { p_key: h, p_field: f, p_by: by });
+  }
+  async hgetall(h) {
+    const v = await this.rpc("stats_hgetall", { p_key: h });
+    return v && typeof v === "object" ? v : {};
+  }
+}
+
 function createStore() {
-  const hasRestKv =
-    typeof process !== "undefined" &&
-    process.env &&
-    process.env.KV_REST_API_URL &&
-    process.env.KV_REST_API_TOKEN;
-  if (hasRestKv) {
+  const env = typeof process !== "undefined" && process.env ? process.env : {};
+  const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_KEY;
+  if (env.SUPABASE_URL && supabaseKey) {
     try {
-      return new KvStore(process.env.KV_REST_API_URL, process.env.KV_REST_API_TOKEN);
+      return new SupabaseStore(env.SUPABASE_URL, supabaseKey);
+    } catch (_) {}
+  }
+  if (env.KV_REST_API_URL && env.KV_REST_API_TOKEN) {
+    try {
+      return new KvStore(env.KV_REST_API_URL, env.KV_REST_API_TOKEN);
     } catch (_) {}
   }
   return new MemoryStore();
@@ -450,5 +500,6 @@ function createEngine(options = {}) {
 module.exports = {
   createEngine,
   EmailParser,
-  CmntyMail
+  CmntyMail,
+  SupabaseStore
 };

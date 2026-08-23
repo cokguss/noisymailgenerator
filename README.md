@@ -132,7 +132,9 @@ Static page + API jalan dalam **satu Worker**. Untuk statistik yang persisten an
 | `PORT` | Opsional (Node) | Port server (default `8000`) |
 | `STATS_KEY` | Disarankan | Kunci akses `/api/stats` — tanpa ini default mudah ditebak |
 | `CMNTY_API_KEY` | Opsional | Override key API mail tanpa ubah kode |
-| `STATS_KV` (binding) | Opsional (Workers) | KV namespace agar statistik persisten antar deploy |
+| `SUPABASE_URL` + `SUPABASE_KEY` (service_role) | Opsional | **Statistik persisten via Supabase** — jalankan `supabase/stats-setup.sql` sekali di SQL Editor |
+| `KV_REST_API_URL` + `KV_REST_API_TOKEN` | Opsional | Alternatif: Upstash Redis untuk statistik persisten |
+| `STATS_KV` (binding) | Opsional (Workers) | Alternatif: KV Cloudflare untuk statistik persisten |
 
 ## ⚠️ Catatan
 

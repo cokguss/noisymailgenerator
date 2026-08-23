@@ -2065,6 +2065,7 @@ body.loading {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  margin-top: 18px;
   padding: 6px 14px;
   border: 1px solid rgba(95, 208, 138, 0.28);
   border-radius: var(--radius-pill);

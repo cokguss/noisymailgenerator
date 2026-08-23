@@ -117,7 +117,8 @@
     if (json && json.status === "success" && json.data?.email) {
       return { email: json.data.email };
     }
-    return { error: t("d.relayError") };
+    /* surface the real upstream reason (rate limit, outage, ...) */
+    return { error: (json && json.message) || t("d.relayError") };
   }
 
   function qs(params) {

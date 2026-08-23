@@ -71,7 +71,7 @@
 
       /* dynamic strings used from main.js */
       "d.requesting": "requesting a fresh mailbox from the network…",
-      "d.ready": "ready — network: cmnty relay · mail lands here automatically.",
+      "d.ready": "ready — network: generator.email · mail lands here automatically.",
       "d.relayError":
         "Could not reach the mail relay — start `npm run dev` or deploy the backend, then retry.",
       "d.addrLivePrefix": "Your temporary address is ",
@@ -163,7 +163,7 @@
 
       /* dynamic strings used from main.js */
       "d.requesting": "meminta mailbox baru dari jaringan…",
-      "d.ready": "siap — jaringan: relay cmnty · email masuk otomatis di sini.",
+      "d.ready": "siap — jaringan: generator.email · email masuk otomatis di sini.",
       "d.relayError":
         "Tidak bisa menghubungi relay mail — jalankan `npm run dev` atau deploy backend-nya, lalu coba lagi.",
       "d.addrLivePrefix": "Alamat sementarama adalah ",

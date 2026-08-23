@@ -14,6 +14,30 @@ async function sha256Prefix(text, len = 20) {
 }
 
 class EmailParser {
+  /* pull the readable body out of a generator.email message page */
+  static extractCleanBody($) {
+    const selectors = [
+      'div.mess_bodiyy',
+      'div[class*="mess_bod"]',
+      'div.user_mess_content',
+      '#email_content',
+      '#mail-summary-body'
+    ];
+
+    for (const sel of selectors) {
+      const container = $(sel);
+      if (container.length > 0) {
+        const clone = container.first().clone();
+        clone.find('script, style, ins, button, iframe, .adsbygoogle, .mesg-row, .mailsrc-panel, .tooltip-container').remove();
+        const bodyText = clone.text().replace(/\n\s*\n/g, '\n').trim();
+        const rawHtml = clone.html() || '';
+        return { bodyText, rawHtml };
+      }
+    }
+
+    return { bodyText: '', rawHtml: '' };
+  }
+
   static extractOtp(text, html = null) {
     const combined = (text || '').trim();
     if (!combined && !html) return null;
@@ -135,86 +159,143 @@ class EmailParser {
 }
 
 /* ============================================================
- * CMNTY TEMPMAIL CLIENT (primary network - REST API)
- * Create : GET /tempmail/create?apikey=
- * Inbox  : GET /tempmail/message?email=&apikey=
+ * GENERATOR.EMAIL CLIENT (free, no key - HTML based)
+ * Technique: GET /{domain}/{username} with the inbox_ctx cookie,
+ * parse the .list-group-item rows (from_div/subj_div/time_div and
+ * the loadInboxClientSide onclick link). No quota, no API key.
  * ============================================================ */
-class CmntyMail {
-  static BASE = "https://api.cmnty.eu.cc";
-  static FALLBACK_KEY = "cmnty-373d1412a0f29bd96ba30bce37bd9812";
+class GeneratorEmail {
+  static BASE = 'https://generator.email';
+  static UA =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
-  get apiKey() {
-    const fromEnv =
-      typeof process !== "undefined" && process.env ? process.env.CMNTY_API_KEY : null;
-    return fromEnv || CmntyMail.FALLBACK_KEY;
+  constructor() {
+    this._domain = null;
+    this._domainAt = 0;
+    this.CACHE_TTL = 120000;
   }
 
-  async request(pathname, params) {
-    const url = `${CmntyMail.BASE}${pathname}?${new URLSearchParams(params)}`;
-    let res;
+  async _get(pathname, extraHeaders = {}) {
+    return fetch(GeneratorEmail.BASE + pathname, {
+      headers: {
+        'User-Agent': GeneratorEmail.UA,
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9,id;q=0.8',
+        Referer: GeneratorEmail.BASE + '/',
+        ...extraHeaders
+      },
+      signal: AbortSignal.timeout(15000)
+    });
+  }
+
+  static _cookies(domain, username, email) {
+    return (
+      'inbox_ctx=' + encodeURIComponent(domain + '/' + username + '/') +
+      '; surl=' + domain + '/' + username +
+      '; embx=' + encodeURIComponent(JSON.stringify([email]))
+    );
+  }
+
+  /* the homepage shows the site's currently active mail domain */
+  async _activeDomain() {
+    const now = Date.now();
+    if (this._domain && now - this._domainAt < this.CACHE_TTL) return this._domain;
+    let domain = 'generator.email';
     try {
-      res = await fetch(url, { signal: AbortSignal.timeout(15000) });
-    } catch (err) {
-      throw new Error(`CMNTY request failed: ${err.message}`);
-    }
-    let body = null;
-    try {
-      body = await res.json();
+      const res = await this._get('/');
+      if (res.ok) {
+        const $ = cheerio.load(await res.text());
+        const shown = ($('#email_ch_text').text() || '').trim();
+        const found =
+          $('#domainName2').attr('value') ||
+          $('#domainName').attr('value') ||
+          (shown.includes('@') ? shown.split('@')[1] : '');
+        if (found) domain = String(found).toLowerCase();
+      }
     } catch (_) {}
-    if (res.status === 200 && body && body.status === true && body.result) return body.result;
-    throw new Error((body && body.message) || `CMNTY request failed (HTTP ${res.status})`);
+    this._domain = domain;
+    this._domainAt = now;
+    return domain;
   }
 
   async createAddress() {
-    const result = await this.request("/tempmail/create", { apikey: this.apiKey });
-    const email = result.email || {};
-    if (!email.address) throw new Error("CMNTY did not return an address");
-    const [localPart, domainPart] = String(email.address).toLowerCase().split("@");
-    return {
-      address: String(email.address).toLowerCase(),
-      username: email.username || localPart,
-      domain: email.domain || domainPart
-    };
-  }
-
-  /* Field names vary between upstream releases - read them defensively. */
-  normalizeMessage(m = {}) {
-    const pick = (...keys) =>
-      keys.map((k) => m[k]).find((v) => v !== undefined && v !== null && v !== "");
-    const str = (v) => (typeof v === "string" ? v.trim() : "");
-
-    const htmlRaw = str(pick("html", "htmlBody", "body_html"));
-    const body =
-      str(pick("body_text", "text", "plain", "content")) ||
-      (htmlRaw ? cheerio.load(htmlRaw).text().replace(/\n\s*\n/g, "\n").trim() : "");
-    const linksInfo = EmailParser.extractVerificationLinks(htmlRaw);
-
-    return {
-      id: String(pick("id", "_id", "messageId", "uid") ?? ""),
-      from: str(pick("from", "sender", "from_address", "fromAddress")) || "(unknown)",
-      subject: str(pick("subject", "title")) || "(no subject)",
-      date: str(pick("date", "created_at", "createdAt", "time", "receivedAt")),
-      body_text: body.slice(0, 4000),
-      otp: EmailParser.extractOtp(body, htmlRaw || null),
-      verification_link: linksInfo.primary_link,
-      all_links: linksInfo.all_links.map((l) => l.url)
-    };
+    const domain = await this._activeDomain();
+    const bytes = crypto.getRandomValues(new Uint8Array(5));
+    const username = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+    return { address: username + '@' + domain, username, domain };
   }
 
   async getMessages(email) {
-    const result = await this.request("/tempmail/message", { email, apikey: this.apiKey });
-    const raw =
-      result.messages && Array.isArray(result.messages.list) ? result.messages.list : [];
-    return raw.map((m) => this.normalizeMessage(m));
+    const formatted = String(email || '').trim().toLowerCase();
+    const [username, domain] = formatted.split('@');
+    if (!username || !domain) throw new Error('Invalid email format: ' + formatted);
+
+    const res = await this._get('/' + domain + '/' + username, {
+      Cookie: GeneratorEmail._cookies(domain, username, formatted)
+    });
+    if (!res.ok) throw new Error('Inbox fetch failed (HTTP ' + res.status + ')');
+
+    const $ = cheerio.load(await res.text());
+    const messages = [];
+
+    $('.list-group-item').each((_, el) => {
+      const item = $(el);
+      if (item.hasClass('active')) return;
+      const from = item.find('[class*="from_div"]').text().trim();
+      const subject = item.find('[class*="subj_div"]').text().trim();
+      const date = item.find('[class*="time_div"]').text().trim();
+      if (!from && !subject) return;
+      if (from === 'From' && subject === 'Subject') return; // header row
+
+      const onclick = item.attr('onclick') || '';
+      const m = onclick.match(/loadInboxClientSide\(['"]([^'"]+)['"]\)/);
+      messages.push({
+        id: m ? m[1] : '',
+        from: from || '(unknown)',
+        subject: subject || '(no subject)',
+        date
+      });
+    });
+
+    return messages;
   }
 
-  async getMessage(email, messageId) {
-    const list = await this.getMessages(email);
-    return (
-      list.find((m) => String(m.id) === String(messageId)) ||
-      list.find((m) => !messageId) ||
-      null
-    );
+  async readMessage(email, link) {
+    const formatted = String(email || '').trim().toLowerCase();
+    const [username, domain] = formatted.split('@');
+    if (!username || !domain) throw new Error('Invalid email format: ' + formatted);
+
+    const clean = String(link || '').replace(/^https?:\/\/[^/]+/, '').replace(/^\//, '');
+    const target = clean.startsWith(domain) ? '/' + clean : '/' + domain + '/' + username + '/' + clean;
+
+    const res = await this._get(target, {
+      Cookie: GeneratorEmail._cookies(domain, username, formatted),
+      Referer: GeneratorEmail.BASE + '/inbox1/'
+    });
+    if (!res.ok) throw new Error('Failed to load message (HTTP ' + res.status + ')');
+
+    const $ = cheerio.load(await res.text());
+    let from = '', subject = '', date = '';
+    const head = $('#mail-summary-head').text() || '';
+    for (const line of head.split('\n')) {
+      const l = line.toLowerCase();
+      if (l.includes('from:') || l.includes('dari:')) from = line.replace(/^(from|dari):\s*/i, '').trim();
+      else if (l.includes('subject:') || l.includes('subjek:')) subject = line.replace(/^(subject|subjek):\s*/i, '').trim();
+      else if (l.includes('date:') || l.includes('tanggal:') || l.includes('received:')) date = line.replace(/^(date|tanggal|received):\s*/i, '').trim();
+    }
+
+    const { bodyText, rawHtml } = EmailParser.extractCleanBody($);
+    const linksInfo = EmailParser.extractVerificationLinks(rawHtml);
+
+    return {
+      from,
+      subject,
+      date,
+      body_text: bodyText.slice(0, 4000),
+      otp: EmailParser.extractOtp(bodyText, rawHtml),
+      verification_link: linksInfo.primary_link,
+      all_links: linksInfo.all_links.map((l) => l.url)
+    };
   }
 }
 
@@ -335,7 +416,7 @@ function createStore() {
  * HIGH-LEVEL OPERATIONS (shared by express + workers + serverless)
  * ============================================================ */
 function createEngine(options = {}) {
-  const cmnty = new CmntyMail();
+  const mail = new GeneratorEmail();
   const statsStore = options.statsStore || createStore();
 
   function fmt(status, data, message = null, errorCode = null) {
@@ -431,22 +512,22 @@ function createEngine(options = {}) {
     return {
       status: 'online',
       service: 'NoisyMail Relay',
-      networks: ['cmnty'],
+      networks: ['generator'],
       endpoints: ['/api/generate', '/api/inbox', '/api/message']
     };
   }
 
   async function opGenerate() {
     try {
-      const created = await cmnty.createAddress();
+      const created = await mail.createAddress();
       return fmt('success', {
         email: created.address,
         username: created.username,
         domain: created.domain,
-        network: 'cmnty'
+        network: 'generator'
       });
     } catch (err) {
-      return fmt('error', null, err.message, 'CMNTY_ERROR');
+      return fmt('error', null, err.message, 'MAIL_ERROR');
     }
   }
 
@@ -455,27 +536,21 @@ function createEngine(options = {}) {
     const formatted = String(email).trim().toLowerCase();
 
     try {
-      const messages = await cmnty.getMessages(formatted);
+      const messages = await mail.getMessages(formatted);
       return fmt('success', {
         email: formatted,
         total_messages: messages.length,
-        /* full detail ships with the list so the UI renders bodies
-           without a second round-trip per message */
+        /* bodies live on the message page - the UI fetches them on click */
         messages: messages.map((m) => ({
           from: m.from,
           subject: m.subject,
           date: m.date,
           link: m.id,
-          detail: {
-            text: m.body_text,
-            links: m.all_links.slice(0, 10),
-            otp: m.otp,
-            verif: m.verification_link
-          }
+          detail: null
         }))
       });
     } catch (err) {
-      return fmt('error', null, err.message, 'CMNTY_ERROR');
+      return fmt('error', null, err.message, 'MAIL_ERROR');
     }
   }
 
@@ -486,20 +561,19 @@ function createEngine(options = {}) {
     const formatted = String(email).trim().toLowerCase();
 
     try {
-      const msg = await cmnty.getMessage(formatted, link);
-      if (!msg) return fmt('error', null, 'Message not found in inbox', 'NOT_FOUND');
+      const msg = await mail.readMessage(formatted, link);
       return fmt('success', { email: formatted, ...msg });
     } catch (err) {
-      return fmt('error', null, err.message, 'CMNTY_ERROR');
+      return fmt('error', null, err.message, 'MAIL_ERROR');
     }
   }
 
-  return { cmnty, opStatus, opGenerate, opInbox, opMessage, opTrack, opStats };
+  return { mail, opStatus, opGenerate, opInbox, opMessage, opTrack, opStats };
 }
 
 module.exports = {
   createEngine,
   EmailParser,
-  CmntyMail,
+  GeneratorEmail,
   SupabaseStore
 };

@@ -69,7 +69,7 @@ Browser ──► Express server (:8000)
    ├── Static: index.html · css · js · assets
    │
    └── /api/*
-        ├── /generate ──► CMNTY API  : alamat baru acak-anonim
+        ├── /generate ──► generator.email : alamat baru acak-anonim (gratis, tanpa key)
         ├── /inbox    ──► daftar pesan + detail lengkap per pesan
         ├── /message  ──► isi pesan, OTP, link verifikasi
         ├── /track    ──► beacon kunjungan anonim (IP hashed harian)
@@ -83,7 +83,7 @@ Semua respons mail diproses oleh `EmailParser`: ekstraksi OTP multi-pola (`123-4
 ```
 noisymailgenerator/
 ├── api/
-│   └── _engine.js        # Engine bersama (runtime-agnostic): CmntyMail
+│   └── _engine.js        # Engine bersama (runtime-agnostic): GeneratorEmail
 │                         # + EmailParser + store statistik — fetch & Web Crypto saja
 ├── server/
 │   ├── server.js         # Express: seluruh API + static file satu container (Node)
@@ -131,7 +131,6 @@ Static page + API jalan dalam **satu Worker**. Untuk statistik yang persisten an
 |----------|--------|--------|
 | `PORT` | Opsional (Node) | Port server (default `8000`) |
 | `STATS_KEY` | Disarankan | Kunci akses `/api/stats` — tanpa ini default mudah ditebak |
-| `CMNTY_API_KEY` | Opsional | Override key API mail tanpa ubah kode |
 | `SUPABASE_URL` + `SUPABASE_KEY` (service_role) | Opsional | **Statistik persisten via Supabase** — jalankan `supabase/stats-setup.sql` sekali di SQL Editor |
 | `KV_REST_API_URL` + `KV_REST_API_TOKEN` | Opsional | Alternatif: Upstash Redis untuk statistik persisten |
 | `STATS_KV` (binding) | Opsional (Workers) | Alternatif: KV Cloudflare untuk statistik persisten |

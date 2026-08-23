@@ -8,8 +8,8 @@
     "start": "node server/server.js",
     "server": "node server/server.js",
     "web": "node scripts/static.js",
-    "cf:dev": "wrangler dev",
-    "cf:deploy": "wrangler deploy"
+    "cf:dev": "npx wrangler dev",
+    "cf:deploy": "npx wrangler deploy"
   },
   "dependencies": {
     "cheerio": "^1.0.0",
@@ -17,9 +17,6 @@
     "express": "^4.21.2"
   },
   "engines": {
-    "node": ">=18"
-  },
-  "devDependencies": {
-    "wrangler": "^4.125.0"
+    "node": "22.x"
   }
 }

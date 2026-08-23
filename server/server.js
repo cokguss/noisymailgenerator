@@ -58,6 +58,14 @@ function createServer(port = 8000) {
     }
   });
 
+  app.get('/api/stats/public', async (req, res) => {
+    try {
+      res.json(await engine.opPublicStats());
+    } catch (err) {
+      res.status(500).json({ status: 'error', message: err.message });
+    }
+  });
+
   app.get('/api/stats', async (req, res) => {
     try {
       const out = await engine.opStats(req.query.key);

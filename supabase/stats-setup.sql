@@ -34,6 +34,14 @@ returns bigint language sql stable as $$
   select value from stats_counters where key = p_key;
 $$;
 
+-- set-if-absent (untuk first_seen / uptime)
+create or replace function stats_setnx(p_key text, p_value bigint)
+returns bigint language sql as $$
+  insert into stats_counters (key, value) values (p_key, p_value)
+  on conflict (key) do nothing
+  returning value;
+$$;
+
 -- set: sadd & scard (unique visitors per hari)
 create or replace function stats_sadd(p_key text, p_member text)
 returns void language sql as $$

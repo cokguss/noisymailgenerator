@@ -2050,6 +2050,94 @@ body.loading {
   }
 }
 
+/* ---------- Public live stats ---------- */
+
+.pub-wrap {
+  max-width: 860px;
+  margin-inline: auto;
+  text-align: center;
+}
+
+.pub-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border: 1px solid rgba(95, 208, 138, 0.28);
+  border-radius: var(--radius-pill);
+  background: rgba(95, 208, 138, 0.07);
+  color: var(--accent-strong);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.pub-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px rgba(95, 208, 138, 0.9);
+  animation: pulse 1.8s ease-in-out infinite;
+}
+
+.pub-grid {
+  margin-top: 22px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.pub-card {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-card);
+  padding: 24px 16px 20px;
+  transition: border-color 0.3s var(--ease-out), transform 0.3s var(--ease-out);
+}
+
+.pub-card:hover {
+  border-color: rgba(95, 208, 138, 0.45);
+  transform: translateY(-3px);
+}
+
+.pub-card-accent {
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(95, 208, 138, 0.14), transparent 70%),
+    var(--surface);
+}
+
+.pub-num {
+  display: block;
+  font-size: clamp(26px, 4vw, 38px);
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.pub-label {
+  display: block;
+  margin-top: 7px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pub-note {
+  margin-top: 18px;
+  font-size: 11.5px;
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+@media (max-width: 720px) {
+  .pub-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 /* ---------- Language toggle ---------- */
 
 .lang-toggle {

@@ -315,6 +315,7 @@ class MemoryStore {
   }
   async incr(k) { this.c[k] = (this.c[k] || 0) + 1; return this.c[k]; }
   async get(k) { return this.c[k] || 0; }
+  async setnx(k, v) { if (!(k in this.c)) this.c[k] = v; return this.c[k] === v ? v : null; }
   async sadd(k, m) { (this.s[k] = this.s[k] || new Set()).add(m); }
   async scard(k) { return this.s[k] ? this.s[k].size : 0; }
   async hincr(h, f, by = 1) {
@@ -339,6 +340,7 @@ class KvStore {
   }
   incr(k) { return this.cmd(["incr", k]); }
   get(k) { return this.cmd(["get", k]); }
+  setnx(k, v) { return this.cmd(["setnx", k, String(v)]); }
   sadd(k, m) { return this.cmd(["sadd", k, m]); }
   scard(k) { return this.cmd(["scard", k]); }
   hincr(h, f, by = 1) { return this.cmd(["hincrby", h, f, String(by)]); }
@@ -380,6 +382,10 @@ class SupabaseStore {
   }
   async get(k) {
     return Number(await this.rpc("stats_get", { p_key: k })) || 0;
+  }
+  async setnx(k, v) {
+    const r = await this.rpc("stats_setnx", { p_key: k, p_value: v });
+    return r === null || r === undefined ? null : v;
   }
   async sadd(k, m) {
     await this.rpc("stats_sadd", { p_key: k, p_member: m });
@@ -437,6 +443,14 @@ function createEngine(options = {}) {
       await statsStore.incr("stats:total");
       await statsStore.incr(`stats:day:${day}`);
       await statsStore.sadd(`stats:uniq:${day}`, uid);
+
+      /* all-time unique (stable per device/network) + first-seen for uptime.
+         Best-effort: never let these break the core tracking counters. */
+      try {
+        const uidAll = await sha256Prefix(`${ip}|${ua}`, 20);
+        await statsStore.sadd("stats:uniq:all", uidAll);
+        await statsStore.setnx("stats:first_seen", Date.now());
+      } catch (_) {}
 
       const device = /iPad|Tablet/i.test(ua)
         ? "tablet"
@@ -568,7 +582,37 @@ function createEngine(options = {}) {
     }
   }
 
-  return { mail, opStatus, opGenerate, opInbox, opMessage, opTrack, opStats };
+  /* public, aggregate-only stats for the landing page (no key needed) */
+  async function opPublicStats() {
+    try {
+      const day = new Date().toISOString().slice(0, 10);
+      const [total, todayViews, uniqToday, uniqTotal, firstSeen] = await Promise.all([
+        statsStore.get("stats:total"),
+        statsStore.get(`stats:day:${day}`),
+        statsStore.scard(`stats:uniq:${day}`),
+        statsStore.scard("stats:uniq:all"),
+        statsStore.get("stats:first_seen")
+      ]);
+
+      const first = Number(firstSeen) || 0;
+      const daysOnline = first
+        ? Math.max(1, Math.ceil((Date.now() - first) / 86400000))
+        : 1;
+
+      return fmt("success", {
+        totalViews: Number(total) || 0,
+        viewsToday: Number(todayViews) || 0,
+        uniqToday: Number(uniqToday) || 0,
+        uniqTotal: Number(uniqTotal) || 0,
+        daysOnline,
+        status: "operational"
+      });
+    } catch (err) {
+      return fmt("error", null, err.message);
+    }
+  }
+
+  return { mail, opStatus, opGenerate, opInbox, opMessage, opTrack, opStats, opPublicStats };
 }
 
 module.exports = {

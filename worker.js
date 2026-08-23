@@ -126,6 +126,9 @@ export default {
           );
         }
 
+        case "/api/stats/public":
+          return json(await engine.opPublicStats());
+
         case "/api/stats": {
           const out = await engine.opStats(q.get("key"));
           return json(

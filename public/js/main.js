@@ -557,6 +557,41 @@
     if (hasWidget) setTimeout(generate, reduceMotion ? 100 : 600);
   })();
 
+  /* ---------- public live stats ---------- */
+
+  function animateNumber(el, target) {
+    const start = Number(String(el.textContent).replace(/\D/g, "")) || 0;
+    if (start === target) {
+      el.textContent = target.toLocaleString();
+      return;
+    }
+    const t0 = performance.now();
+    const dur = 900;
+    const tick = (t) => {
+      const p = Math.min((t - t0) / dur, 1);
+      const eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.round(start + (target - start) * eased).toLocaleString();
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+
+  async function loadPublicStats() {
+    if (!$("pubTotal")) return;
+    const json = await fetchJson(`${activeApiBase()}/stats/public`);
+    if (!json || json.status !== "success") return;
+    const d = json.data || {};
+    animateNumber($("pubTotal"), d.totalViews || 0);
+    animateNumber($("pubToday"), d.viewsToday || 0);
+    animateNumber($("pubUniq"), d.uniqToday || 0);
+    animateNumber($("pubDays"), d.daysOnline || 1);
+  }
+
+  if ($("pubTotal")) {
+    loadPublicStats();
+    setInterval(loadPublicStats, 60000);
+  }
+
   /* ---------- visitor beacon ---------- */
 
   function initTracking() {

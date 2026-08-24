@@ -243,15 +243,18 @@ body {
   transition: color 0.2s, border-color 0.2s, background-color 0.2s;
 }
 
-.icon-btn:hover:not(:disabled) {
-  color: var(--accent);
-  border-color: var(--accent);
+/* hover only for real pointers - touch devices get sticky :hover */
+@media (hover: hover) {
+  .icon-btn:hover:not(:disabled) {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
 }
 
 .icon-btn.copied {
-  color: var(--accent-ink);
-  background: var(--accent);
+  color: var(--accent);
   border-color: var(--accent);
+  background: rgba(95, 208, 138, 0.12);
 }
 
 .icon-btn:disabled {

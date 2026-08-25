@@ -83,8 +83,21 @@ class EmailParser {
           foundHtmlOtp = t.replace(/[- ]/, '');
           return false;
         }
+        /* alphanumeric codes shown on their own line, e.g. S9N98U */
+        if (/^[A-Z0-9]{4,8}$/i.test(t) && /[0-9]/.test(t) && /[A-Za-z]/.test(t)) {
+          foundHtmlOtp = t.toUpperCase();
+          return false;
+        }
       });
       if (foundHtmlOtp) return foundHtmlOtp;
+    }
+
+    /* plain-text fallback: a standalone alphanumeric code (letters + digits)
+       when a code keyword is present (html emails are handled above). */
+    if (/\b(otp|code|kode|pin|passcode|token|verification|verifikasi)\b/i.test(combined)) {
+      const tokens = combined.match(/[A-Z0-9]{4,8}/g) || [];
+      const alnum = tokens.find((tok) => /[0-9]/.test(tok) && /[A-Z]/.test(tok));
+      if (alnum) return alnum;
     }
 
     const mSixDigit = combined.match(/\b([0-9]{6})\b/);
@@ -188,9 +201,10 @@ class GeneratorEmail {
     });
   }
 
-  static _cookies(domain, username, email) {
+  static _cookies(domain, username, email, ctx) {
+    const context = ctx || domain + '/' + username + '/';
     return (
-      'inbox_ctx=' + encodeURIComponent(domain + '/' + username + '/') +
+      'inbox_ctx=' + encodeURIComponent(context) +
       '; surl=' + domain + '/' + username +
       '; embx=' + encodeURIComponent(JSON.stringify([email]))
     );
@@ -265,23 +279,40 @@ class GeneratorEmail {
     const [username, domain] = formatted.split('@');
     if (!username || !domain) throw new Error('Invalid email format: ' + formatted);
 
-    const clean = String(link || '').replace(/^https?:\/\/[^/]+/, '').replace(/^\//, '');
-    const target = clean.startsWith(domain) ? '/' + clean : '/' + domain + '/' + username + '/' + clean;
+    const clean = String(link || '')
+      .replace(/^https?:\/\/[^/]+/, '')
+      .replace(/^\/+/, '')
+      .replace(/\/+$/, '');
+    /* the message id is the last path segment; generator.email renders
+       the body only when inbox_ctx carries the full domain/user/msgid
+       context (cookie-driven, not from the URL path). */
+    const segs = clean.split('/').filter(Boolean);
+    const msgid = segs.length ? segs[segs.length - 1] : '';
+    const ctx = domain + '/' + username + '/' + msgid;
+    const target = '/' + ctx;
 
     const res = await this._get(target, {
-      Cookie: GeneratorEmail._cookies(domain, username, formatted),
+      Cookie: GeneratorEmail._cookies(domain, username, formatted, ctx),
       Referer: GeneratorEmail.BASE + '/inbox1/'
     });
     if (!res.ok) throw new Error('Failed to load message (HTTP ' + res.status + ')');
 
     const $ = cheerio.load(await res.text());
-    let from = '', subject = '', date = '';
-    const head = $('#mail-summary-head').text() || '';
-    for (const line of head.split('\n')) {
-      const l = line.toLowerCase();
-      if (l.includes('from:') || l.includes('dari:')) from = line.replace(/^(from|dari):\s*/i, '').trim();
-      else if (l.includes('subject:') || l.includes('subjek:')) subject = line.replace(/^(subject|subjek):\s*/i, '').trim();
-      else if (l.includes('date:') || l.includes('tanggal:') || l.includes('received:')) date = line.replace(/^(date|tanggal|received):\s*/i, '').trim();
+
+    /* current markup keeps from/subject/time in dedicated divs;
+       fall back to the legacy "From:/Subject:/Date:" label lines. */
+    const $head = $('#mail-summary-head');
+    let from = $head.find('[class*="from_div"]').first().text().trim();
+    let subject = $head.find('[class*="subj_div"]').first().text().trim();
+    let date = $head.find('[class*="time_div"]').first().text().trim();
+    if (!from && !subject) {
+      const head = $head.text() || '';
+      for (const line of head.split('\n')) {
+        const l = line.toLowerCase();
+        if (l.includes('from:') || l.includes('dari:')) from = line.replace(/^(from|dari):\s*/i, '').trim();
+        else if (l.includes('subject:') || l.includes('subjek:')) subject = line.replace(/^(subject|subjek):\s*/i, '').trim();
+        else if (l.includes('date:') || l.includes('tanggal:') || l.includes('received:')) date = line.replace(/^(date|tanggal|received):\s*/i, '').trim();
+      }
     }
 
     const { bodyText, rawHtml } = EmailParser.extractCleanBody($);

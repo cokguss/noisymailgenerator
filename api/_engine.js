@@ -73,6 +73,24 @@ class EmailParser {
     if (html) {
       const $ = cheerio.load(html);
       let foundHtmlOtp = null;
+
+      /* strongest signal: a short code shown with wide letter-spacing (how
+         most OTP emails present the code). Catches all-letter codes like
+         NTQBXR that no keyword/digit heuristic would find. */
+      $('[style*="letter-spacing"]').each((_, el) => {
+        const style = $(el).attr('style') || '';
+        const ls = style.match(/letter-spacing:\s*([0-9.]+)(px|em|rem)?/i);
+        if (!ls) return;
+        const px = /e?m$/i.test(ls[2] || 'px') ? parseFloat(ls[1]) * 16 : parseFloat(ls[1]);
+        if (px < 2) return; // narrow spacing → ordinary text, not a code block
+        const t = $(el).text().trim();
+        if (/^[A-Z0-9]{4,8}$/i.test(t) && !/^(19\d\d|20[0-9]\d)$/.test(t)) {
+          foundHtmlOtp = t.toUpperCase();
+          return false;
+        }
+      });
+      if (foundHtmlOtp) return foundHtmlOtp;
+
       $('b, strong, h1, h2, h3, td, span, font').each((_, el) => {
         const t = $(el).text().trim();
         if (/^[0-9]{4,8}$/.test(t) && !/^(19\d\d|20[2-3]\d)$/.test(t)) {
@@ -249,8 +267,10 @@ class GeneratorEmail {
     });
     if (!res.ok) throw new Error('Inbox fetch failed (HTTP ' + res.status + ')');
 
-    const $ = cheerio.load(await res.text());
+    const html = await res.text();
+    const $ = cheerio.load(html);
     const messages = [];
+    const seen = new Set();
 
     $('.list-group-item').each((_, el) => {
       const item = $(el);
@@ -263,13 +283,41 @@ class GeneratorEmail {
 
       const onclick = item.attr('onclick') || '';
       const m = onclick.match(/loadInboxClientSide\(['"]([^'"]+)['"]\)/);
+      const id = m ? m[1] : '';
+      const key = id.split('/').filter(Boolean).pop() || from + '|' + subject + '|' + date;
+      if (seen.has(key)) return;
+      seen.add(key);
       messages.push({
-        id: m ? m[1] : '',
+        id,
         from: from || '(unknown)',
         subject: subject || '(no subject)',
         date
       });
     });
+
+    /* a single / most-recent message is rendered auto-opened inline as
+       the summary head (class list-group-item2, not a clickable row), so
+       the row loop above misses it. Pull it in via SD.mess_id_raw so the
+       inbox is never shown as empty when a message actually exists. */
+    const $head = $('#mail-summary-head');
+    if ($head.length) {
+      const from = $head.find('[class*="from_div"]').first().text().trim();
+      const subject = $head.find('[class*="subj_div"]').first().text().trim();
+      const date = $head.find('[class*="time_div"]').first().text().trim();
+      const idm = html.match(/mess_id_raw['"\s:]+['"]([A-Za-z0-9_]+)['"]/);
+      let msgid = idm ? idm[1] : '';
+      if (msgid.indexOf('page_is_') === 0) msgid = '';
+      const key = msgid || from + '|' + subject + '|' + date;
+      if ((from || subject) && !seen.has(key)) {
+        seen.add(key);
+        messages.unshift({
+          id: msgid ? domain + '/' + username + '/' + msgid : '',
+          from: from || '(unknown)',
+          subject: subject || '(no subject)',
+          date
+        });
+      }
+    }
 
     return messages;
   }
